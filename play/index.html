@@ -104,7 +104,7 @@ body{background:var(--paper);color:var(--ink);font-family:var(--body);-webkit-us
       <div class="mortar card"><div class="mortar-num" id="mortar">5</div><div class="mortar-lbl">MORTAR</div></div>
     </div>
     <div class="meters card">
-      <div class="meter"><span>TO MOON</span><div class="track"><div class="fill" id="prog"></div></div><span id="progT">0%</span></div>
+      <div class="meter"><span id="toLbl">TO MOON</span><div class="track"><div class="fill" id="prog"></div></div><span id="progT">0%</span></div>
       <div class="meter"><span>STABILITY</span><div class="track"><div class="fill" id="stab"></div></div><span id="stabT">100%</span></div>
       <div class="meter"><span>SPEED</span><div class="track"><div class="fill" id="tempoF"></div></div><span id="tempoT">1</span></div>
     </div>
@@ -140,11 +140,14 @@ body{background:var(--paper);color:var(--ink);font-family:var(--body);-webkit-us
   </div>
   <div class="overlay clear" id="win" hidden>
     <div class="title-card card">
-      <h2>ONE GIANT STACK</h2>
+      <h2 id="winTitle">ONE GIANT STACK</h2>
       <p id="winStats"></p>
       <div class="row">
         <button class="btn" id="bAdmire" type="button">Admire the view</button>
-        <button class="btn primary" id="bAgain" type="button">Build another</button>
+        <button class="btn" id="bAgain" type="button">Start over</button>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="bNext" type="button">Continue to Mars</button>
       </div>
     </div>
   </div>
@@ -153,36 +156,61 @@ body{background:var(--paper);color:var(--ink);font-family:var(--body);-webkit-us
 <script>
 (() => {
 'use strict';
-// ================= scale schedule: 1 mm → Moon =================
-const MOON = 3.844e11, GROW = 0.09, BH = 26, SPAN = 10;
-const heights = [], cum = [];
-{ let t = 0; while (t < MOON - 1e-6) { let h = Math.max(1, t * GROW); if (t + h > MOON) h = MOON - t; if (MOON - (t + h) < h * 0.25) h = MOON - t; heights.push(h); t += h; cum.push(t); } }
-const N = heights.length;
-const MILES = [
-  [3,'An ant'],[25,'A strawberry'],[180,'Tall grass'],[1000,'A toddler'],[1750,'A grown-up'],
-  [12000,'An oak tree'],[93000,'Statue of Liberty'],[330000,'Eiffel Tower'],[828000,'Burj Khalifa'],
-  [2000000,'Cumulus clouds'],[4806000,'Mont Blanc'],[8849000,'Mount Everest'],[11000000,'Airliners'],
-  [30000000,'The stratosphere'],[100000000,'Kármán line: space begins'],[408000000,'International Space Station'],
-  [20200000000,'GPS satellites'],[35786000000,'Geostationary orbit'],[384400000000,'The Moon']
+// ================= chapters: each is one tower from one world to the next =================
+const GROW = 0.09, BH = 26, SPAN = 10;
+const CHAPTERS = [
+  { name: 'Earth to the Moon', to: 'the Moon', toShort: 'MOON', target: 3.844e11, h0: 1, targetCol: '#b9a6ff', ground: 'earth',
+    miles: [
+      [3,'An ant'],[25,'A strawberry'],[180,'Tall grass'],[1000,'A toddler'],[1750,'A grown-up'],
+      [12000,'An oak tree'],[93000,'Statue of Liberty'],[330000,'Eiffel Tower'],[828000,'Burj Khalifa'],
+      [2000000,'Cumulus clouds'],[4806000,'Mont Blanc'],[8849000,'Mount Everest'],[11000000,'Airliners'],
+      [30000000,'The stratosphere'],[100000000,'Kármán line: space begins'],[408000000,'International Space Station'],
+      [20200000000,'GPS satellites'],[35786000000,'Geostationary orbit'],[384400000000,'The Moon']],
+    cameos: [
+      {mm: 7e8,    kind: 'teapot',    name: "Russell's teapot", side: 0.2},
+      {mm: 6e9,    kind: 'spaghetti', name: 'Flying spaghetti', side: 0.8},
+      {mm: 6e10,   kind: 'teapot',    name: "Russell's teapot", side: 0.78},
+      {mm: 2.2e11, kind: 'spaghetti', name: 'Flying spaghetti', side: 0.22}],
+    // Layers of the sky, in real millimetres. Entering a new layer resets speed (and the landing assist) to 1.
+    layers: [
+      [0, 'The ground'], [1e4, 'Rooftops'], [1e6, 'Troposphere'], [1.2e7, 'Stratosphere'], [5e7, 'Mesosphere'],
+      [8.5e7, 'Thermosphere'], [6e8, 'Exosphere'], [1e10, 'Deep space'], [2e11, 'Lunar approach']],
+    sky: [[-0.3,'#ffd3c0'],[2.5,'#ffe7a6'],[4,'#bff0e4'],[5.6,'#8fc4ff'],[7,'#5c63ff'],[8,'#3b259a'],[9,'#1e124f'],[12,'#0f0a27']] },
+  // heights in chapter 2 are measured from the Moon's surface; closest Earth–Mars-style hop of 54.6 million km
+  { name: 'The Moon to Mars', to: 'Mars', toShort: 'MARS', target: 5.46e13, h0: 1e5, targetCol: '#e2603a', ground: 'moon',
+    miles: [
+      [2e6,'Lunar rover tracks'],[3e9,'Lunar Gateway orbit'],[6e10,"Edge of the Moon's pull"],[1.5e12,'Space telescopes at L2'],
+      [1e13,'Ten million kilometres'],[2.73e13,'Halfway to Mars'],[5.4577e13,'Deimos'],[5.4594e13,'Phobos'],[5.46e13,'Mars']],
+    cameos: [
+      {mm: 8e11,  kind: 'spaghetti', name: 'Flying spaghetti', side: 0.8},
+      {mm: 2e13,  kind: 'teapot',    name: "Russell's teapot", side: 0.2},
+      {mm: 4.5e13,kind: 'teapot',    name: "Russell's teapot", side: 0.7}],
+    layers: [[0, 'Moon dust'], [1e9, 'Lunar orbit'], [6.6e10, 'Lagrange gap'], [1e12, 'Interplanetary'], [1e13, 'Solar wind'], [4e13, 'Mars approach']],
+    sky: [[4,'#0f0a27'],[11,'#140c2c'],[12.5,'#1c0f2a'],[13.4,'#33121f'],[13.8,'#4d1a14']] }
 ];
-const CAMEOS = [
-  {mm: 7e8,    kind: 'teapot',    name: "Russell's teapot", side: 0.2},
-  {mm: 6e9,    kind: 'spaghetti', name: 'Flying spaghetti', side: 0.8},
-  {mm: 6e10,   kind: 'teapot',    name: "Russell's teapot", side: 0.78},
-  {mm: 2.2e11, kind: 'spaghetti', name: 'Flying spaghetti', side: 0.22}
-];
-const WIND_LO = 3e5, WIND_HI = 2e7, SPACE = 1e8;
-// Layers of the sky, in real millimetres. Entering a new layer resets speed (and the landing assist) to 1.
-const LAYERS = [
-  [0, 'The ground'], [1e4, 'Rooftops'], [1e6, 'Troposphere'], [1.2e7, 'Stratosphere'], [5e7, 'Mesosphere'],
-  [8.5e7, 'Thermosphere'], [6e8, 'Exosphere'], [1e10, 'Deep space'], [2e11, 'Lunar approach']
-];
-const layerOf = mm => { let k = 0; while (k + 1 < LAYERS.length && mm >= LAYERS[k + 1][0]) k++; return k; };
+const WIND_LO = 3e5, WIND_HI = 2e7, SPACE = 1e8;   // chapter 1: windy band and where space begins
+let CH = 0, MOON, heights, cum, N, MILES, CAMEOS, LAYERS, SKY;
+const SCHED = {};
+function schedule(k){
+  if (SCHED[k]) return SCHED[k];
+  const c = CHAPTERS[k], hs = [], cs = []; let t = 0;
+  while (t < c.target - 1e-6) { let h = Math.max(c.h0, t * GROW); if (t + h > c.target) h = c.target - t; if (c.target - (t + h) < h * 0.25) h = c.target - t; hs.push(h); t += h; cs.push(t); }
+  return SCHED[k] = {heights: hs, cum: cs};
+}
+function setChapterData(k){
+  CH = Math.max(0, Math.min(CHAPTERS.length - 1, k|0));
+  const c = CHAPTERS[CH], sc = schedule(CH);
+  MOON = c.target; heights = sc.heights; cum = sc.cum; N = heights.length;
+  MILES = c.miles; CAMEOS = c.cameos; LAYERS = c.layers; SKY = c.sky.map(([q, col]) => [q, hex(col)]);
+}
+const layersOf = k => CHAPTERS[k].layers;
+const layerIn = (L, mm) => { let k = 0; while (k + 1 < L.length && mm >= L[k + 1][0]) k++; return k; };
+const layerOf = mm => layerIn(LAYERS, mm);
 const UPG = {
   wide:  {name:'Wider blocks',  desc:'More surface on every block. Easier landings.', max:4, cost:[6,10,15,22]},
   steel: {name:'Steel frame',   desc:'Your tower tolerates more bending.',            max:4, cost:[8,12,18,26]},
   crane: {name:'Calm crane',    desc:'The hanging block swings in a narrower arc, so it moves more slowly.',         max:4, cost:[5,9,14,20]},
-  shield:{name:'Wind shield',   desc:'Gusts push blocks less in the windy zone.',     max:3, cost:[8,14,20]}
+  shield:{name:'Wind shield',   desc:'Gusts and solar wind push blocks less.',     max:3, cost:[8,14,20]}
 };
 const C = {ink:'#16121f', paper:'#fff6e6', pink:'#ff5c9d', teal:'#14c7b4', yellow:'#ffd23f', cobalt:'#3552ff', lilac:'#b9a6ff', red:'#ff4b3e', mint:'#9df2d5', orange:'#ff8a3d', green:'#8be36b', steel:'#cfd3dc'};
 
@@ -206,11 +234,11 @@ function mmForY(wy){
   const i = Math.floor(wy / BH); if (i >= N) return MOON;
   return (i ? cum[i-1] : 0) + (wy/BH - i) * heights[i];
 }
-const zoneOf = mm => mm >= SPACE ? 'space' : (mm >= WIND_LO && mm < WIND_HI ? 'wind' : 'calm');
+const zoneOf = mm => CH ? (layerOf(mm) >= 4 ? 'solar' : 'space') : (mm >= SPACE ? 'space' : (mm >= WIND_LO && mm < WIND_HI ? 'wind' : 'calm'));
 const lerp = (a,b,t) => a + (b-a)*t, clamp = (v,a,b) => Math.max(a, Math.min(b, v));
 const ease = t => t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2)/2;
 const hex = h => { const n = parseInt(h.slice(1),16); return [n>>16,(n>>8)&255,n&255]; };
-const SKY = [[-0.3,'#ffd3c0'],[2.5,'#ffe7a6'],[4,'#bff0e4'],[5.6,'#8fc4ff'],[7,'#5c63ff'],[8,'#3b259a'],[9,'#1e124f'],[12,'#0f0a27']].map(([k,c]) => [k, hex(c)]);
+setChapterData(0);
 function sky(mm){
   const l = Math.log10(Math.max(mm, 0.5));
   for (let i = 1; i < SKY.length; i++) if (l <= SKY[i][0]) {
@@ -222,19 +250,22 @@ function sky(mm){
 // one building material per layer: timber, brick, terrazzo, steel, heat tiles, crystal, solar glass, alloy, moon rock
 const SKINS = [[C.yellow, C.orange, 'stripes'], [C.pink, '#c93a76', 'grid'], ['#e9e2d4', C.ink, 'terrazzo'], [C.cobalt, '#8fa0ff', 'hatch'],
   [C.orange, '#b8430f', 'dots'], [C.lilac, '#5b3fd0', 'grid'], [C.teal, '#0a6f65', 'hatch'], [C.mint, C.ink, 'zigzag'], ['#f2ecdf', '#8f8676', 'dots']];
-function skin(mm){ return SKINS[layerOf(mm)]; }
+// chapter 2: moon dust, chrome, solar panel, copper, red iron, Mars rust
+const SKINS2 = [['#d9d3e6', '#8f86a8', 'dots'], ['#c7ced6', '#6e7681', 'hatch'], [C.cobalt, '#d9a441', 'grid'], ['#d9824a', '#8a3f17', 'stripes'], ['#c2412d', '#6e1d12', 'terrazzo'], ['#e2603a', C.yellow, 'zigzag']];
+const SKINS_BY = [SKINS, SKINS2];
+function skin(mm){ return SKINS_BY[CH][layerOf(mm)]; }
 const $ = id => document.getElementById(id);
 const buzz = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch(e){} };
 
 // ================= state =================
-const fresh = () => ({blocks:[{off:0,br:false}], mortar:5, up:{wide:0,steel:0,crane:0,shield:0}, perfects:0, repairs:0, combo:0, seen:{}, music:true, landed:false});
+const fresh = () => ({blocks:[{off:0,br:false}], mortar:5, up:{wide:0,steel:0,crane:0,shield:0}, perfects:0, repairs:0, combo:0, seen:{}, music:true, landed:false, chapter:0, done:[]});
 let S = fresh(), disp = [0];
 let X = new Float64Array(1), ratios = new Float32Array(1), maxR = 0, worstK = -1, locked = false;
 const KEY = 'tower-moon-en-v1';
 function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} }
 function load(obj){
   if (!obj || !Array.isArray(obj.blocks) || !obj.blocks.length) return false;
-  S = Object.assign(fresh(), obj); S.up = Object.assign(fresh().up, obj.up || {}); S.seen = obj.seen || {};
+  S = Object.assign(fresh(), obj); S.up = Object.assign(fresh().up, obj.up || {}); S.seen = obj.seen || {}; S.done = obj.done || []; setChapterData(S.chapter || 0);
   disp = S.blocks.map(b => b.off); return true;
 }
 function recompute(){
@@ -279,16 +310,27 @@ const Audio = (() => {
     [[52,[0,3,7,14]],[57,[0,4,10,14]],[52,[0,3,7,14]],[48,[0,4,7,11]]],
     [[48,[0,4,7,14]],[53,[0,4,7,14]],[57,[0,3,7,14]],[55,[0,4,7,9]]]
   ];
-  const LEAD = ['square','triangle','square','sawtooth','square','sine','triangle','sine','triangle'];
-  const FOUR = [0,0,1,0,1,0,0,0,0], SIXT = [0,1,0,0,1,0,1,0,0];
-  let layer = 0;
+  // Mars: darker minor grooves with heavy, steady drums and tom fills
+  const LP2 = [
+    [[50,[0,3,7,10]],[46,[0,4,7,11]],[48,[0,4,7,10]],[45,[0,3,7,10]]],
+    [[52,[0,3,7,12]],[48,[0,4,7,12]],[50,[0,3,7,12]],[47,[0,3,7,10]]],
+    [[45,[0,3,7,14]],[41,[0,4,7,14]],[43,[0,4,7,9]],[40,[0,3,7,10]]],
+    [[50,[0,3,7,12]],[53,[0,4,7,12]],[48,[0,4,7,12]],[46,[0,4,7,12]]],
+    [[47,[0,3,7,10]],[43,[0,4,7,11]],[45,[0,3,7,10]],[42,[0,3,6,10]]],
+    [[50,[0,3,7,12]],[46,[0,4,7,12]],[48,[0,4,7,12]],[45,[0,4,7,12]]]
+  ];
+  const LPS = [LP, LP2];
+  const LEADS = [['square','triangle','square','sawtooth','square','sine','triangle','sine','triangle'], ['sawtooth','square','triangle','square','sawtooth','square']];
+  const FOURS = [[0,0,1,0,1,0,0,0,0], [1,1,0,1,1,1]], SIXTS = [[0,1,0,0,1,0,1,0,0], [0,1,1,1,1,1]], TOMS = [[0,0,0,0,0,0,0,0,0], [1,0,1,1,1,1]];
+  let layer = 0, chap = 0, solar = false;
   const PROGS = {
     // climbing: Fmaj7 – Em7 – Dm7 – Cmaj7, bright G6 turnaround
     play: [[53,[0,4,7,11]],[52,[0,3,7,10]],[50,[0,3,7,10]],[48,[0,4,7,11]],[53,[0,4,7,14]],[52,[0,3,7,10]],[50,[0,3,7,10]],[55,[0,4,7,9]]],
     // looking down: slow, floating Am9 – Fmaj9 – Cadd9 – Gsus
     view: [[57,[0,3,7,14]],[53,[0,4,11,14]],[48,[0,4,7,14]],[55,[0,5,7,14]]],
     // on the Moon: triumphant C – G – Am – F anthem
-    moon: [[48,[0,4,7,12]],[55,[0,4,7,12]],[57,[0,3,7,12]],[53,[0,4,7,12]]]
+    moon: [[48,[0,4,7,12]],[55,[0,4,7,12]],[57,[0,3,7,12]],[53,[0,4,7,12]]],
+    mars: [[50,[0,3,7,12]],[46,[0,4,7,12]],[48,[0,4,7,12]],[45,[0,3,7,12]]]
   };
   const ANTHEM = [12,null,16,19, 24,null,23,19, 21,null,19,16, 17,null,19,null];
   const ARP = [0,2,1,3,2,1,3,2];
@@ -343,7 +385,7 @@ const Audio = (() => {
   }
   function kick(t, peak){ const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.setValueAtTime(130, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.14); o.connect(g); g.connect(music); env(g, t, 0.003, peak, 0.22); o.start(t); o.stop(t + 0.3); }
   function play(i, t){
-    const prog = mode === 'play' ? LP[layer] : PROGS[mode], bar = Math.floor(i / 16), s = i % 16, [root, iv] = prog[bar % prog.length];
+    const prog = mode === 'play' ? LPS[chap][layer] : (mode === 'moon' && chap ? PROGS.mars : PROGS[mode]), bar = Math.floor(i / 16), s = i % 16, [root, iv] = prog[bar % prog.length];
     const space = clamp((Math.log10(Math.max(alt,1)) - 7.5) / 1.5, 0, 1);
     if (mode === 'view') {
       if (s === 0) for (const v of iv) tone('sine', hz(root + 12 + v), t, 1.2, 0.05, S16*18, music, 0, 0.6);
@@ -368,10 +410,10 @@ const Audio = (() => {
       if (ANTHEM[s] !== null) tone('sine', hz(72 + ANTHEM[s] - (bar % 2 ? 0 : 12)), t, 0.02, 0.16, S16*3, music, 0, 0.5);
       return;
     }
-    const moon = false, drums = 1 - 0.3*space, wind = !moon && alt >= WIND_LO && alt < WIND_HI;   // drums stay all the way up: a steady stroke to row by
+    const moon = false, drums = 1 - 0.3*space, wind = chap === 0 && alt >= WIND_LO && alt < WIND_HI;   // drums stay all the way up: a steady stroke to row by
     if (s === 0) for (const v of (moon ? iv.slice(0, 3) : iv)) tone('sawtooth', hz(root + 12 + v), t, moon ? 0.05 : 0.4, moon ? 0.035 : 0.035 + 0.02*space, S16*16, music, moon ? 1400 : 700 + 900*space, moon ? 0 : 0.3);
     if (s === 0 || s === 7 || s === 10) tone('triangle', hz(root - 12), t, 0.01, 0.32*(0.6 + 0.4*drums), S16*(s === 0 ? 5 : 3), music);
-    if (s % 2 === 0 && !(moon && s % 4 === 2)) { const v = iv[ARP[(s/2 + bar) % 8] % iv.length]; tone(!moon && space > 0.5 && layer < 7 ? 'sine' : LEAD[layer], hz(root + 24 + v + (s === 14 && bar % 2 ? 12 : 0)), t, 0.005, moon ? 0.05 : 0.07, S16*1.6, music, 2600, 0.45 + 0.3*space); }
+    if (s % 2 === 0 && !(moon && s % 4 === 2)) { const v = iv[ARP[(s/2 + bar) % 8] % iv.length]; tone(chap === 0 && space > 0.5 && layer < 7 ? 'sine' : LEADS[chap][layer], hz(root + 24 + v + (s === 14 && bar % 2 ? 12 : 0)), t, 0.005, moon ? 0.05 : 0.07, S16*1.6, music, 2600, 0.45 + 0.3*space); }
     if (moon && ANTHEM[s] !== null) tone('triangle', hz(60 + ANTHEM[s] + (bar % 2 ? 0 : -12) + 12), t, 0.01, 0.14, S16*1.8, music, 0, 0.25);
     if (!moon && space > 0.3 && s === 8) tone('sine', hz(root + 43), t, 0.6, 0.05*space, 2.2, music, 0, 0.8);
     if (drums > 0.02) {
@@ -379,8 +421,10 @@ const Audio = (() => {
       if (s === 4 || s === 12) hit(t, 'bandpass', 0.22*drums, 0.16, 1800, music);
       if (s % 2 === 1 && !(moon && s % 4 === 1)) hit(t, 'highpass', (s % 4 === 3 ? 0.09 : 0.05)*drums, 0.04, 7000, music);
       if (wind && s === 15) hit(t, 'bandpass', 0.05, 0.6, 500, music);
-      if (FOUR[layer] && (s === 4 || s === 12)) kick(t, 0.4*drums);
-      if (SIXT[layer] && s % 2 === 0 && s % 4) hit(t, 'highpass', 0.035*drums, 0.03, 9000, music);
+      if (FOURS[chap][layer] && (s === 4 || s === 12)) kick(t, 0.4*drums);
+      if (SIXTS[chap][layer] && s % 2 === 0 && s % 4) hit(t, 'highpass', 0.035*drums, 0.03, 9000, music);
+      if (TOMS[chap][layer] && bar % 2 === 1 && s >= 12 && s % 2 === 0) { const o = tone('sine', [160, 130, 100][(s - 12)/2] || 90, t, 0.003, 0.3, 0.18, music); o.frequency.exponentialRampToValueAtTime(60, t + 0.16); }
+      if (solar && s === 0 && bar % 2 === 0) { const f = hit(t, 'bandpass', 0.12, 1.1, 300, music); f.frequency.exponentialRampToValueAtTime(1800, t + 1); }
       if (moon && s === 15 && bar % 4 === 3) hit(t, 'highpass', 0.25, 0.9, 5000, music);
     }
   }
@@ -395,7 +439,7 @@ const Audio = (() => {
   function celebrate(big){
     const now = ctx.currentTime + 0.03;
     let st = anchorStep + Math.max(0, Math.ceil((now - anchorTime) / S16)); if (st % 2) st++;
-    const t = anchorTime + (st - anchorStep)*S16, prog = mode === 'moon' ? PROGS.moon : LP[layer], [root, iv] = prog[Math.floor(st/16) % prog.length];
+    const t = anchorTime + (st - anchorStep)*S16, prog = mode === 'moon' ? (chap ? PROGS.mars : PROGS.moon) : LPS[chap][layer], [root, iv] = prog[Math.floor(st/16) % prog.length];
     const seq = big ? [0,1,2,3,1,2,3,4] : [0,1,2,4];
     const note = k => root + 24 + (k >= iv.length ? 12 + iv[0] : iv[k]) + (big && seq.length > 4 && k > 0 ? 0 : 0);
     seq.forEach((k, j) => {
@@ -432,7 +476,8 @@ const Audio = (() => {
     setMusic(on){ if (music) music.gain.setTargetAtTime(on ? (mode === 'moon' ? 0.62 : 0.55) : 0, ctx.currentTime, 0.1); },
     setAlt(mm){ alt = mm; },
     setTempo(b){ bpmTarget = clamp(b, BASE_BPM, MAX_BPM); },
-    setLayer(k){ layer = clamp(k, 0, LP.length - 1); },
+    setLayer(k){ layer = clamp(k, 0, LPS[chap].length - 1); },
+    setChapter(k){ chap = k; layer = 0; }, setSolar(on){ solar = on; },
     resetTempo(){ bpm = bpmTarget = BASE_BPM; S16 = 60/bpm/4; }, tempoTarget: () => bpmTarget, tempo: () => bpm, BASE_BPM, MAX_BPM,
     setCrane(on){ craneOn = on; },
     level(){ if (!meter) return 0; const a = new Float32Array(meter.fftSize); meter.getFloatTimeDomainData(a); let m = 0; for (const v of a) m = Math.max(m, Math.abs(v)); return m; }, mode: () => mode, musicGain: () => music ? music.gain.value : -1, setCue(c){ cue = c; },
@@ -572,13 +617,14 @@ function tagLabel(label, x, y, fill){
   cx.strokeStyle = C.ink; cx.lineWidth = 2; cx.strokeRect(lx - tw/2 - 6, y - 9, tw + 12, 18);
   cx.fillStyle = C.ink; cx.fillText(label, lx, y + 1);
 }
+const ckey = i => (CH ? 'cameo' + CH + '_' : 'cameo') + i;
 function drawCameos(){
   cameoHits = [];
   CAMEOS.forEach((c, i) => {
     const y = sy(yForMM(c.mm)) + Math.sin(time*0.7 + i)*10; if (y < -120 || y > H + 120) return;
     const z = Math.min(1, W/460), x = W/2 + Math.sin(time*0.16 + i*2 + (c.side > 0.5 ? Math.PI : 0))*W*0.42;
     if (c.kind === 'teapot') drawTeapot(x, y, z); else drawSpaghetti(x, y, z);
-    const got = S.seen['cameo' + i];
+    const got = S.seen[ckey(i)];
     tagLabel(c.name.toUpperCase(), x, y + 50*z, got ? C.paper : (Math.sin(time*5) > 0 ? C.yellow : C.mint));
     cameoHits.push({i, x, y, r: 60*z});
   });
@@ -586,7 +632,7 @@ function drawCameos(){
 function tapCameo(x, y){
   for (const h of cameoHits) if (Math.hypot(x - h.x, y - h.y) < h.r) {
     const c = CAMEOS[h.i];
-    if (!S.seen['cameo' + h.i]) { S.seen['cameo' + h.i] = true; S.mortar += 5; toast(c.name, '+5 mortar for spotting it'); Audio.sfx('mile'); party(h.x, h.y, 26); buzz(30); save(); ui(); }
+    if (!S.seen[ckey(h.i)]) { S.seen[ckey(h.i)] = true; S.mortar += 5; toast(c.name, '+5 mortar for spotting it'); Audio.sfx('mile'); party(h.x, h.y, 26); buzz(30); save(); ui(); }
     else { toast(c.name, c.kind === 'teapot' ? 'Still orbiting. Still unproven.' : 'It waves a noodly appendage'); Audio.sfx('good'); }
     return true;
   }
@@ -609,7 +655,14 @@ const FLY = {
   dragon:  {lo: 2e6,   hi: 4e7,   speed: 34, w: 2, gain: 3, msg: 'The dragon puffs a smoke ring'},
   simurgh: {lo: 1.2e7, hi: 9e7,   speed: 30, w: 2, gain: 3, msg: 'The Simurgh sings'},
   iss:     {lo: 3.3e8, hi: 4.6e8, speed: 12, w: 3, gain: 2, msg: 'The space station crew waves'},
-  meteor:  {lo: 5e7,   hi: 3.8e11, speed: 150, w: 3, gain: 2, msg: 'Meteor caught'}
+  meteor:  {lo: 5e7,   hi: 3.8e11, speed: 150, w: 3, gain: 2, msg: 'Meteor caught'},
+  // chapter 2 (heights above the Moon)
+  satM:    {ch: 1, lo: 1e5,  hi: 5e10,  speed: 20, msg: 'Beep beep'},
+  comet:   {ch: 1, lo: 1e9,  hi: 5.4e13, speed: 120, w: 3, gain: 2, msg: 'Comet caught'},
+  asteroid:{ch: 1, lo: 1e11, hi: 5.4e13, speed: 28, w: 4, gain: 1, msg: 'Bonk! The asteroid spins away'},
+  simurghM:{ch: 1, lo: 1e12, hi: 4e13,  speed: 30, w: 1, gain: 3, msg: 'The Simurgh sings'},
+  ufoM:    {ch: 1, lo: 1e5,  hi: 5.4e13, speed: 60, rare: true, prize: 'UFO spotted'},
+  alienM:  {ch: 1, lo: 1e5,  hi: 5.4e13, speed: 16, rare: true, prize: 'An alien waves back'}
 };
 const resting = () => started && time - lastDropAt > 4;
 // SPEED 1–100 follows the tempo. At speed N the landing is pulled N/2 % of the way to the centre (50% at most).
@@ -620,6 +673,7 @@ function spawnFlyer(){
   const lo = mmForY(Math.max(0, camB - 40)), hi = mmForY(camB + FLOOR() - 160);
   const opts = [];
   for (const [k, f] of Object.entries(FLY)) {
+    if ((f.ch || 0) !== CH) continue;
     const a = Math.max(lo, f.lo), b = Math.min(hi, f.hi); if (a >= b) continue;
     for (let w = 0; w < (f.w ?? (f.rare ? 1 : 5)); w++) opts.push([k, a, b]);
   }
@@ -805,7 +859,20 @@ function drawMeteor(t){
   cx.beginPath(); cx.arc(0, 0, 11, 0, 6.283); inked('#8b8378');
   cx.fillStyle = '#5e574d'; cx.beginPath(); cx.arc(-3, -3, 3, 0, 6.283); cx.arc(4, 3, 2.2, 0, 6.283); cx.fill();
 }
-const DRAW = {witch: drawWitch, pegasus: drawPegasus, dragon: drawDragon, simurgh: drawSimurgh, iss: drawIss, meteor: drawMeteor, butterfly: drawButterfly, kite: drawKite, heli: drawHeli, plane: drawPlane, sat: drawSat, shuttle: drawShuttle, ufo: drawUfo, alien: drawAlien};
+function drawComet(t){
+  const fl = 1 + Math.sin(t*20)*0.06;
+  cx.beginPath(); cx.moveTo(6, -13); cx.quadraticCurveTo(-80, -60, -150*fl, -70); cx.quadraticCurveTo(-80, -30, 6, 13); cx.closePath(); inked('#bfeefb', 2);
+  cx.beginPath(); cx.moveTo(4, -7); cx.quadraticCurveTo(-50, -34, -96*fl, -42); cx.quadraticCurveTo(-50, -16, 4, 7); cx.closePath(); cx.fillStyle = '#ffffff'; cx.fill();
+  cx.beginPath(); cx.arc(0, 0, 12, 0, 6.283); inked('#e6f6ff');
+  cx.fillStyle = C.teal; cx.beginPath(); cx.arc(3, -2, 4, 0, 6.283); cx.fill();
+}
+function drawAsteroid(t){
+  cx.save(); cx.rotate(t*0.8);
+  cx.beginPath(); [[20,0],[14,13],[0,18],[-15,12],[-20,-2],[-10,-15],[6,-17],[16,-9]].forEach(([x, y], k) => k ? cx.lineTo(x, y) : cx.moveTo(x, y)); cx.closePath(); inked('#a79c8d');
+  cx.fillStyle = '#7d7366'; for (const [x, y, r] of [[-6, -4, 4], [7, 6, 3], [6, -8, 2.5]]) { cx.beginPath(); cx.arc(x, y, r, 0, 6.283); cx.fill(); }
+  cx.restore();
+}
+const DRAW = {satM: drawSat, comet: drawComet, asteroid: drawAsteroid, simurghM: drawSimurgh, ufoM: drawUfo, alienM: drawAlien, witch: drawWitch, pegasus: drawPegasus, dragon: drawDragon, simurgh: drawSimurgh, iss: drawIss, meteor: drawMeteor, butterfly: drawButterfly, kite: drawKite, heli: drawHeli, plane: drawPlane, sat: drawSat, shuttle: drawShuttle, ufo: drawUfo, alien: drawAlien};
 function updateFlyers(dt){
   spawnIn -= dt; if (spawnIn <= 0) { spawnIn = resting() ? 1 + Math.random()*1.5 : 3 + Math.random()*4; spawnFlyer(); }
   for (const f of flyers) {
@@ -813,7 +880,7 @@ function updateFlyers(dt){
     const sp = FLY[f.type].speed * f.zip * Math.min(1, W/420 + 0.3) * (f.react > 0 && f.react < 0.7 ? 0.2 : 1);
     f.t += dt; f.x += f.dir * sp * dt;
     if (f.type === 'alien' || f.type === 'ufo') f.wy += Math.sin(f.t*1.1 + f.seed)*12*dt;
-    if (f.type === 'meteor' && !(f.react > 0)) f.wy -= 70*dt;
+    if ((f.type === 'meteor' || f.type === 'comet') && !(f.react > 0)) f.wy -= 70*dt;
     if (f.zip > 1) f.wy += 160*dt;
   }
   flyers = flyers.filter(f => f.x > -320 && f.x < W + 320 && Math.abs(sy(f.wy) - H/2) < H*1.6);
@@ -865,15 +932,16 @@ function drop(){
   const n = S.blocks.length;
   const b = beatNow(), spb = 60 / Audio.tempo();
   let dur = (Math.ceil(b*2 + 0.001)/2 - b) * spb; if (dur < 0.14) dur += spb/2;          // land on the next eighth note
-  if (zoneOf(cum[n-1]) === 'space') dur += spb;                                            // low gravity: one beat longer
+  if (zoneOf(cum[n-1]) === 'space' || zoneOf(cum[n-1]) === 'solar') dur += spb;                                            // low gravity: one beat longer
   const rel = sliderPos();
-  falling = { rel, target: rel*(1 - assist()), y0: (n + 2.4) * BH, t: 0, dur };
+  falling = { rel, target: rel*(1 - assist()), y0: (n + 2.4) * BH, t: 0, dur, solar: solarDir() };
   manual = false; hideHint(); lastDropAt = time;
 }
 function land(){
   const n = S.blocks.length, mm0 = cum[n-1];
-  let off = falling.target; falling = null;
+  let off = falling.target; const fallInfo = falling; falling = null;
   let note = '';
+  if (zoneOf(mm0) === 'solar') { off += fallInfo.solar * 0.07 * (1 - 0.3*S.up.shield); note = 'Solar wind pushed it ' + (fallInfo.solar > 0 ? 'right' : 'left'); }
   if (zoneOf(mm0) === 'wind') { const g = (Math.random()-0.5) * 0.22 * (1 - 0.3*S.up.shield); if (Math.abs(g) > 0.05) note = 'A gust nudged your block'; off += g; }
   off = clamp(off, -0.9, 0.9);
   const a = Math.abs(off);
@@ -891,8 +959,9 @@ function land(){
   for (const [m, name] of MILES) if (m > mm0 && m <= mm1 && m < MOON) { toast(name, 'You passed ' + fmt(m)); Audio.sfx('mile'); party(); }
   const z1 = zoneOf(mm1);
   let look = false;
-  if (z1 === 'wind' && !S.seen.wind) { S.seen.wind = true; toast('WIND ZONE', 'Gusts nudge blocks after you drop them'); Audio.sfx('mile'); party(); }
-  if (z1 === 'space' && !S.seen.space) { S.seen.space = true; toast('SPACE', 'Low gravity. Blocks drift down slowly'); Audio.sfx('mile'); party(); }
+  if (z1 === 'solar' && !S.seen.solar) { S.seen.solar = true; toast('SOLAR WIND', 'It pushes blocks, switching sides every two bars'); Audio.sfx('mile'); }
+  if (!CH && z1 === 'wind' && !S.seen.wind) { S.seen.wind = true; toast('WIND ZONE', 'Gusts nudge blocks after you drop them'); Audio.sfx('mile'); party(); }
+  if (!CH && z1 === 'space' && !S.seen.space) { S.seen.space = true; toast('SPACE', 'Low gravity. Blocks drift down slowly'); Audio.sfx('mile'); party(); }
   if (layerOf(mm1) !== layerOf(mm0)) {
     Audio.resetTempo(); Audio.setLayer(layerOf(mm1)); syncStreak = 0;
     toast(LAYERS[layerOf(mm1)][1].toUpperCase(), 'New layer · new material, new music, speed 1');
@@ -905,6 +974,8 @@ function land(){
   if (look && !locked) lookDown(4.5);
 }
 const won = () => S.blocks.length >= N;
+// solar wind blows one way for two bars, then the other: you can hear the whoosh and plan for it
+const solarDir = () => (Math.floor(beatNow() / 8) % 2) ? 1 : -1;
 
 // ================= hammer & brace =================
 // Tap the left third of the screen and the hammer hits from the left; the right third, from the right.
@@ -973,6 +1044,7 @@ function lookDown(sec){
 function lookUp(){ ovTarget = 0; Audio.setMode(cer || S.landed ? 'moon' : 'play'); $('bView').classList.remove('on'); hideHint(); }
 function drawOverview(a){
   if (a <= 0.01) return;
+  if (CH > 0) { drawJourney(a); return; }
   const n = S.blocks.length, topY = n*BH, F = FLOOR(), CX = W/2;
   const yTop = 215, yGround = F - 24, Z = Math.min(1, (yGround - yTop) / topY);
   const oy = wy => yGround - wy*Z;
@@ -1025,6 +1097,41 @@ function drawOverview(a){
   cx.restore();
 }
 
+// The whole journey as a spiral: Earth at the centre, each finished tower baked into one ribbon, then the tower you are building.
+function drawJourney(a){
+  const F = FLOOR(), top = 205, cxs = W/2, cys = (top + F)/2 + 8, R0 = Math.min(W*0.44, (F - top)/2);
+  const NC = CHAPTERS.length, TH = NC*Math.PI*1.15;
+  const P = th => { const r = R0*(0.14 + 0.86*th/TH); return [cxs + Math.cos(th - Math.PI/2)*r, cys + Math.sin(th - Math.PI/2)*r]; };
+  cx.save(); cx.globalAlpha = a;
+  cx.fillStyle = '#0f0a27'; cx.fillRect(0, 0, W, H);
+  cx.strokeStyle = C.yellow; cx.lineWidth = 2; for (let k = 0; k < 50; k++) { const x = (k*97) % W, y = (k*61) % H, r = 2 + (k % 3); cx.beginPath(); cx.moveTo(x - r, y); cx.lineTo(x + r, y); cx.moveTo(x, y - r); cx.lineTo(x, y + r); cx.stroke(); }
+  // the full route, dashed
+  cx.strokeStyle = 'rgba(255,246,230,.35)'; cx.lineWidth = 2; cx.setLineDash([5, 6]); cx.beginPath();
+  for (let k = 0; k <= 160; k++) { const [x, y] = P(TH*k/160); k ? cx.lineTo(x, y) : cx.moveTo(x, y); } cx.stroke(); cx.setLineDash([]);
+  const segment = (k, xs, n) => {
+    const sc = schedule(k), L = layersOf(k), th0 = TH*k/NC, span = TH/NC, total = sc.cum.length, pts = [];
+    for (let i = 0; i < n; i++) {
+      const th = th0 + span*(i + 1)/total, [x, y] = P(th), [x2, y2] = P(th + 0.002), len = Math.hypot(x2 - x, y2 - y) || 1;
+      const nx = -(y2 - y)/len, ny = (x2 - x)/len, o = clamp(xs[i] || 0, -6, 6)*2.4;
+      pts.push([x + nx*o, y + ny*o, SKINS_BY[k][layerIn(L, sc.cum[i])][0]]);
+    }
+    if (!pts.length) return null;
+    cx.lineCap = 'round'; cx.lineJoin = 'round';
+    cx.strokeStyle = C.ink; cx.lineWidth = 11; cx.beginPath(); pts.forEach(([x, y], i) => i ? cx.lineTo(x, y) : cx.moveTo(x, y)); cx.stroke();
+    cx.lineWidth = 6; for (let i = 1; i < pts.length; i++) { cx.strokeStyle = pts[i][2]; cx.beginPath(); cx.moveTo(pts[i-1][0], pts[i-1][1]); cx.lineTo(pts[i][0], pts[i][1]); cx.stroke(); }
+    return pts[pts.length - 1];
+  };
+  for (let k = 0; k < CH; k++) if (S.done[k]) segment(k, S.done[k].x, S.done[k].x.length);
+  const here = segment(CH, dispX, S.blocks.length);
+  const planet = (th, r, col, name, reached) => { const [x, y] = P(th); cx.fillStyle = C.ink; cx.beginPath(); cx.arc(x + 3, y + 3, r, 0, 6.283); cx.fill(); cx.globalAlpha = a*(reached ? 1 : 0.55); cx.beginPath(); cx.arc(x, y, r, 0, 6.283); inked(col, 2.5); cx.globalAlpha = a; tagLabel(name, x, y + r + 14, reached ? C.paper : '#c9c1e6'); };
+  planet(0, 15, '#3fae6b', 'EARTH', true);
+  planet(TH/NC, 11, '#b9a6ff', 'MOON', CH >= 1 || won());
+  planet(TH, 14, '#e2603a', 'MARS', CH >= 1 && won());
+  if (here) tagLabel('YOU ARE HERE · ' + fmt(cum[S.blocks.length - 1]).toUpperCase(), here[0], here[1] - 18, C.yellow);
+  tagLabel('THE JOURNEY SO FAR', W/2, top - 4, C.teal);
+  cx.restore();
+}
+
 // ================= Moon & landing ceremony =================
 let cer = null;
 function moonGeom(){
@@ -1037,12 +1144,12 @@ function drawMoon(){
   const g = moonGeom();
   if (g.cym + g.R < 0 || g.cym - g.R > H) return g;
   cx.fillStyle = C.ink; cx.beginPath(); cx.arc(g.cxm + 6, g.cym + 6, g.R, 0, 6.283); cx.fill();
-  cx.beginPath(); cx.arc(g.cxm, g.cym, g.R, 0, 6.283); inked(C.lilac, 3);
+  cx.beginPath(); cx.arc(g.cxm, g.cym, g.R, 0, 6.283); inked(CHAPTERS[CH].targetCol, 3);
   cx.save(); cx.clip(); cx.globalAlpha = 0.45; cx.fillStyle = pattern('dots', C.ink); cx.fillRect(Math.max(0, g.cxm - g.R), Math.max(0, g.cym - g.R), W, H); cx.restore();
   for (let k = 0; k < 9; k++) {
     const a = g.ang + (k - 2)*0.13 + 0.05, d = 26 + (k % 3)*46, r = 12 + (k*7) % 18;
     const x = g.cxm + Math.cos(a)*(g.R - d), y = g.cym + Math.sin(a)*(g.R - d);
-    cx.save(); cx.translate(x, y); cx.rotate(a + Math.PI/2); cx.beginPath(); cx.ellipse(0, 0, r, r*0.45, 0, 0, 6.283); inked(k % 3 ? C.paper : C.pink, 2.5); cx.restore();
+    cx.save(); cx.translate(x, y); cx.rotate(a + Math.PI/2); cx.beginPath(); cx.ellipse(0, 0, r, r*0.45, 0, 0, 6.283); inked(CH ? (k % 3 ? '#f0a07a' : '#a63a22') : (k % 3 ? C.paper : C.pink), 2.5); cx.restore();
   }
   return g;
 }
@@ -1114,7 +1221,7 @@ function drawCeremony(dt, g){
 }
 
 // ================= updates (Android app) =================
-const BUILD = '20', VERSION = '2.3';
+const BUILD = '21', VERSION = '3.0';
 const DL_API = 'https://api.github.com/repos/kubratemtehh-jpg/tower-to-the-moon-download/releases/latest';
 const DL_APK = 'https://github.com/kubratemtehh-jpg/tower-to-the-moon-download/releases/latest/download/tower-to-the-moon.apk';
 const isApp = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
@@ -1163,18 +1270,40 @@ $('bReset').onclick = e => { if (!resetArm) { resetArm = true; e.target.textCont
 function restart(){
   Audio.setLayer(0);
   const m = S.music; S = fresh(); S.music = m; disp = [0]; camB = 0; camX = 0; manual = false; falling = null; cer = null; flyers = []; parts = [];
+  setChapterData(0); Audio.setChapter(0);
   $('win').hidden = true; Audio.setAlt(1); Audio.setMode('play'); recompute(); save(); hint(HOW);
 }
 $('bAgain').onclick = restart;
 $('bAdmire').onclick = () => { $('win').hidden = true; hint('Tap the Moon to see your stats again'); };
-function showWin(){ $('winStats').textContent = `${N} blocks, from 1 mm to 384,400 km. ${S.perfects} perfect drops and ${S.repairs} hammer hits along the way.`; $('win').hidden = false; }
+function showWin(){
+  const more = CH + 1 < CHAPTERS.length;
+  $('winTitle').textContent = CH ? 'YOU REACHED MARS' : 'ONE GIANT STACK';
+  $('winStats').textContent = CH
+    ? `${N} more blocks, 54.6 million km from the Moon to Mars. ${S.perfects} perfect drops and ${S.repairs} hammer hits so far. More worlds are coming.`
+    : `${N} blocks, from 1 mm to 384,400 km. ${S.perfects} perfect drops and ${S.repairs} hammer hits along the way.`;
+  $('bNext').hidden = !more; if (more) $('bNext').textContent = 'Continue to ' + CHAPTERS[CH + 1].to.replace(/^the /, 'the ');
+  $('win').hidden = false;
+}
+// Finish this chapter: keep its tower as one baked shape, then start the next tower on the world you reached.
+function nextChapter(){
+  if (CH + 1 >= CHAPTERS.length) return;
+  const xs = []; let x = 0; for (const b of S.blocks) { x += b.off; xs.push(Math.round(x*1000)/1000); }
+  S.done[CH] = {x: xs};
+  S.chapter = CH + 1; S.blocks = [{off: 0, br: false}]; S.landed = false; S.combo = 0;
+  setChapterData(S.chapter); disp = [0]; camB = 0; camX = 0; manual = false; falling = null; cer = null; flyers = []; parts = [];
+  Audio.setChapter(CH); Audio.setLayer(0); Audio.resetTempo(); Audio.setMode('play'); Audio.setAlt(cum[0]);
+  $('win').hidden = true; recompute(); save();
+  toast(CHAPTERS[CH].name.toUpperCase(), 'Chapter ' + (CH + 1) + ' · new layers, new music');
+  setTimeout(() => lookDown(5), 1600);
+}
+$('bNext').onclick = () => { Audio.sfx('click'); nextChapter(); };
 $('bTop').onclick = () => { Audio.sfx('click'); if (ovTarget) lookUp(); manual = false; };
 $('bView').onclick = () => { if (cer) return; Audio.sfx('click'); ovTarget ? lookUp() : lookDown(0); };
 $('bMusic').onclick = () => { S.music = !S.music; Audio.setMusic(S.music); musicBtn(); save(); };
 function musicBtn(){ const b = $('bMusic'); b.classList.toggle('on', S.music); b.setAttribute('aria-pressed', S.music); b.setAttribute('aria-label', S.music ? 'Music on' : 'Music off'); b.style.textDecoration = S.music ? 'none' : 'line-through'; }
 function focusOn(i){ if (i < 0) return; manual = true; camTarget = i*BH - FLOOR()*0.45; }
 $('bStart').onclick = () => {
-  started = true; $('intro').hidden = true; Audio.start(); Audio.setAlt(topMM()); Audio.setLayer(layerOf(topMM())); Audio.setMusic(S.music);
+  started = true; $('intro').hidden = true; Audio.start(); Audio.setAlt(topMM()); Audio.setChapter(CH); Audio.setLayer(layerOf(topMM())); Audio.setMusic(S.music);
   if (won()) { Audio.setMode('moon'); if (!S.landed) startCeremony(); else showWin(); }
   else if (S.blocks.length < 3) hint(HOW);
   checkUpdate(false);
@@ -1187,7 +1316,8 @@ function ui(){
   $('alt').textContent = fmt(mm);
   $('sub').innerHTML = won() ? 'Block ' + N + ' of ' + N + ' · <b>you made it</b>' : LAYERS[layerOf(mm)][1] + ' · block ' + n + ' of ' + N + ' · next <b>' + fmt(heights[Math.min(n, N-1)]) + '</b>';
   const nx = MILES.find(m => m[0] > mm);
-  $('next').textContent = nx ? 'Next: ' + nx[1] + ' at ' + fmt(nx[0]) : 'You are standing on the Moon';
+  $('next').textContent = nx ? 'Next: ' + nx[1] + ' at ' + fmt(nx[0]) : 'You are standing on ' + CHAPTERS[CH].to;
+  $('toLbl').textContent = 'TO ' + CHAPTERS[CH].toShort;
   if (S.mortar !== lastMortar) { $('mortar').textContent = S.mortar; lastMortar = S.mortar; }
   const p = (n-1)/(N-1);
   $('prog').style.width = (p*100).toFixed(1) + '%'; $('progT').textContent = Math.floor(p*100) + '%';
@@ -1276,6 +1406,7 @@ function frame(now){
   // resting: after a few quiet seconds the tempo eases back down
   if (started && time - lastDropAt > 4 && !cer && !won()) Audio.setTempo(Audio.tempoTarget() - 1.2*dt);
   Audio.setCrane(started && !busy() && !locked);
+  Audio.setSolar(started && !won() && zoneOf(topMM()) === 'solar');
   Audio.setCue(clamp(1 - (speedOf(Audio.tempo()) - 1)/60, 0, 1));
   { const b = beatNow(), fr = ((b % 1) + 1) % 1, down = ((Math.floor(b) % 4) + 4) % 4 === 0; pulse = Math.exp(-fr*7) * (down ? 1 : 0.55); }
   if ((frame.tu = (frame.tu || 0) + dt) > 0.25) { frame.tu = 0; const b = Audio.tempo(); const sp = speedOf(b); $('tempoT').textContent = Math.round(sp); $('tempoF').style.width = sp.toFixed(0) + '%'; }
@@ -1300,7 +1431,7 @@ function draw(n, dt){
   }
   cx.globalAlpha = 0.07 + 0.05*pulse; cx.fillStyle = pattern('dots', C.ink); cx.fillRect(0, 0, W, H); cx.globalAlpha = 1;
   const mmTop = mmForY(wTop);
-  const sa = clamp((Math.log10(Math.max(mmTop,1)) - 7.3) / 1.2, 0, 1);
+  const sa = CH ? 1 : clamp((Math.log10(Math.max(mmTop,1)) - 7.3) / 1.2, 0, 1);
   if (sa > 0) {
     cx.strokeStyle = C.yellow; cx.lineWidth = 2; cx.lineCap = 'round';
     for (const s of stars) {
@@ -1313,13 +1444,13 @@ function draw(n, dt){
   if (prog > 0.45 && moonY < -W*1.5) {
     const r = 10 + 60*Math.pow((prog-0.45)/0.55, 3), mx = W*0.18, my = 190 + r;
     cx.fillStyle = C.ink; cx.beginPath(); cx.arc(mx + 4, my + 4, r, 0, 6.283); cx.fill();
-    cx.beginPath(); cx.arc(mx, my, r, 0, 6.283); inked(C.lilac);
+    cx.beginPath(); cx.arc(mx, my, r, 0, 6.283); inked(CHAPTERS[CH].targetCol);
   }
   const PS = 420, par = 0.6, pc = camB*par;
   for (let sct = Math.floor((pc - (H - F)) / PS) - 1; sct * PS <= pc + F + PS; sct++) {
     for (const sh of shapesFor(sct + 1000)) { const y = F - ((sct + sh.y)*PS - pc); if (y > -40 && y < H + 40) drawShape(sh, sh.x*W, y); }
   }
-  for (const c of clouds) {
+  if (!CH) for (const c of clouds) {
     const y = sy(yForMM(c.mm)); if (y < -80 || y > H + 80) continue;
     const x = ((c.x*W*1.3 + time*8*c.s) % (W*1.3)) - W*0.15, z = c.s;
     const blob = (ox, oy) => { cx.beginPath(); cx.arc(ox - 26*z, oy, 18*z, Math.PI*0.5, Math.PI*1.5); cx.arc(ox - 6*z, oy - 16*z, 20*z, Math.PI, 0); cx.arc(ox + 20*z, oy - 4*z, 16*z, Math.PI*1.3, Math.PI*0.5); cx.closePath(); };
@@ -1327,7 +1458,12 @@ function draw(n, dt){
     cx.fillStyle = '#ffffff'; blob(x, y); cx.fill(); cx.lineWidth = 2.5; cx.strokeStyle = C.ink; cx.stroke();
   }
   const gy = sy(0);
-  if (gy < H + 400) {
+  if (CH && gy < H + 400) {                 // chapter 2 stands on the Moon: lilac dust with craters
+    cx.fillStyle = '#cfc6ec'; cx.fillRect(0, gy, W, H - gy + 10);
+    cx.globalAlpha = 0.5; cx.fillStyle = pattern('dots', C.ink); cx.fillRect(0, gy, W, H - gy + 10); cx.globalAlpha = 1;
+    cx.fillStyle = C.ink; cx.fillRect(0, gy, W, 3);
+    for (let k = 0; k < 6; k++) { cx.beginPath(); cx.ellipse(((k*137) % 100)/100*W, gy + 16 + (k % 3)*18, 18 + (k*7) % 16, 5 + k % 3, 0, 0, 6.283); inked(k % 2 ? '#e8e2fb' : '#a99fd0', 2); }
+  } else if (gy < H + 400) {
     cx.lineWidth = 2.5; cx.strokeStyle = C.ink;
     for (const p of grass) {
       const top = sy(yForMM(p.h)), x = p.x*W, wpx = yForMM(p.w);
@@ -1393,6 +1529,10 @@ function draw(n, dt){
       void ax; void ay; void d;
     }
   }
+  if (zoneOf(mmNow) === 'solar') {         // solar wind streaks show which way it blows right now
+    const d = solarDir(); cx.strokeStyle = 'rgba(255,190,90,.55)'; cx.lineWidth = 2;
+    for (let k = 0; k < 26; k++) { const yy = ((k*71) % 100)/100*H, xx = (((k*53 + time*260*d) % (W + 120)) + W + 120) % (W + 120) - 60; cx.beginPath(); cx.moveTo(xx, yy); cx.lineTo(xx - d*36, yy); cx.stroke(); }
+  }
   drawFlyers();
   drawCeremony(dt, g);
   drawCameos();
@@ -1431,7 +1571,7 @@ function start(data){
   if (!load(data && data.blocks ? data : null)) { try { load(JSON.parse(localStorage.getItem(KEY))); } catch(e){} }
   recompute(); musicBtn(); camB = Math.max(0, S.blocks.length*BH - FLOOR()*0.55);
   $('hint').firstChild.textContent = HOW;
-  if (S.blocks.length > 1) $('bStart').textContent = won() ? 'Back to the Moon' : 'Keep building';
+  if (S.blocks.length > 1 || CH) $('bStart').textContent = won() ? 'Back to ' + CHAPTERS[CH].to : 'Keep building';
   hideHint();
   requestAnimationFrame(frame);
 }
@@ -1439,7 +1579,8 @@ try { window.claude?.hot?.snapshot?.(() => S); } catch(e){}
 if (location.hash === '#debug') window.__ttm = {
   fly(type, mm, x){ flyers.push({type, wy: yForMM(mm), x: x ?? W*0.5, dir: 1, t: 0, seed: 1, got: false, zip: 1, react: 0}); FLY[type].speed = 0; }, tempo: () => Audio.tempo(), tempoTarget: () => Audio.tempoTarget(), speed: () => speedOf(Audio.tempo()), level: () => Audio.level(), amode: () => Audio.mode(), mgain: () => Audio.musicGain(), setTempo: b => Audio.setTempo(b),
   look(){ lookDown(0); }, beat: () => beatNow(), pos: () => sliderPos(), audio: () => Audio.beat(), ceremony(){ startCeremony(); }, setT(t){ if (cer) cer.t = t; },
-  hammer(i, side){ swing(i, side || 1); }
+  hammer(i, side){ swing(i, side || 1); },
+  next(){ nextChapter(); }, chapter: () => CH, setT2(t){ if (cer) cer.t = t; }
 };
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 })();
