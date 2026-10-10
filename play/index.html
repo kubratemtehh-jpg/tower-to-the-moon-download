@@ -288,7 +288,8 @@ const Audio = (() => {
     master.connect(comp); comp.connect(lim); lim.connect(ctx.destination);
     music = ctx.createGain(); music.gain.value = S.music ? 0.55 : 0; music.connect(master);
     sfxBus = ctx.createGain(); sfxBus.gain.value = 0.7; sfxBus.connect(master);
-    delay = ctx.createDelay(1); delay.delayTime.value = S16 * 3; fb = ctx.createGain(); fb.gain.value = 0.32;
+    // echo time is fixed: changing it along with the tempo smeared the echoes together
+    delay = ctx.createDelay(1); delay.delayTime.value = 0.3; fb = ctx.createGain(); fb.gain.value = 0.32;
     const dl = ctx.createBiquadFilter(); dl.type = 'lowpass'; dl.frequency.value = 2400;
     delay.connect(dl); dl.connect(fb); fb.connect(delay); dl.connect(music);
     const len = ctx.sampleRate; noise = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -340,7 +341,15 @@ const Audio = (() => {
       if (s === 0) { boom(t, cue); pend(hz(root + 48), t, 0.06*cue, 0.5, 0, 0.6); }
       else pend(s === 12 ? 1760 : 1320, t, (s === 12 ? 0.09 : 0.06)*cue, 0.06, tri*0.8, 0);
     }
-    const moon = mode === 'moon', drums = moon ? 1 : 1 - space, wind = !moon && alt >= WIND_LO && alt < WIND_HI;
+    if (mode === 'moon') {
+      if (s === 0 || s === 8) { kick(t, 0.5); tone('triangle', hz(root - 12), t, 0.01, 0.3, S16*7, music); }
+      if (s === 4 || s === 12) hit(t, 'bandpass', 0.15, 0.14, 1800, music);
+      if (s % 4 === 2) hit(t, 'highpass', 0.05, 0.04, 7000, music);
+      if (s === 0) for (const v of iv.slice(0, 3)) tone('triangle', hz(root + 12 + v), t, 0.08, 0.04, S16*15, music);
+      if (ANTHEM[s] !== null) tone('triangle', hz(72 + ANTHEM[s] - (bar % 2 ? 0 : 12)), t, 0.01, 0.12, S16*1.8, music);
+      return;
+    }
+    const moon = false, drums = 1 - space, wind = !moon && alt >= WIND_LO && alt < WIND_HI;
     if (s === 0) for (const v of (moon ? iv.slice(0, 3) : iv)) tone('sawtooth', hz(root + 12 + v), t, moon ? 0.05 : 0.4, moon ? 0.035 : 0.035 + 0.02*space, S16*16, music, moon ? 1400 : 700 + 900*space, moon ? 0 : 0.3);
     if (s === 0 || s === 7 || s === 10) tone('triangle', hz(root - 12), t, 0.01, 0.32*(0.6 + 0.4*drums), S16*(s === 0 ? 5 : 3), music);
     if (s % 2 === 0 && !(moon && s % 4 === 2)) { const v = iv[ARP[(s/2 + bar) % 8] % iv.length]; tone(!moon && space > 0.5 ? 'sine' : 'square', hz(root + 24 + v + (s === 14 && bar % 2 ? 12 : 0)), t, 0.005, moon ? 0.05 : 0.07, S16*1.6, music, 2600, 0.45 + 0.3*space); }
@@ -357,7 +366,7 @@ const Audio = (() => {
   function tick(){
     if (!ctx) return;
     const now = ctx.currentTime, d = lastTick ? now - lastTick : 0; lastTick = now;
-    if (bpm !== bpmTarget) { const r = 3*d; bpm = bpm < bpmTarget ? Math.min(bpmTarget, bpm + r) : Math.max(bpmTarget, bpm - r); S16 = 60/bpm/4; delay.delayTime.setTargetAtTime(S16*3, now, 0.3); }
+    if (bpm !== bpmTarget) { const r = 3*d; bpm = bpm < bpmTarget ? Math.min(bpmTarget, bpm + r) : Math.max(bpmTarget, bpm - r); S16 = 60/bpm/4; }
     // if the screen stalled the timer, skip the missed steps instead of firing them all at once
     while (next < now - 0.05) { next += S16; step++; }
     while (next < now + LOOKAHEAD) { anchorStep = step; anchorTime = next; play(step, next); next += S16; step++; } }
@@ -405,7 +414,15 @@ const Audio = (() => {
     setCrane(on){ craneOn = on; }, setCue(c){ cue = c; },
     // beats since the music started, on the clock the listener actually hears
     beat(){ if (!ctx || ctx.state !== 'running' || !anchorTime) return null; const heard = ctx.currentTime - (ctx.outputLatency || 0) - (ctx.baseLatency || 0); return anchorStep/4 + (heard - anchorTime)/(S16*4); },
-    setMode(m){ if (m === mode) return; mode = m; if (ctx) { step = Math.ceil(step / 16) * 16; music.gain.setTargetAtTime(S.music ? (m === 'moon' ? 0.42 : 0.55) : 0, ctx.currentTime, 0.3); } },
+    setMode(m){
+      if (m === mode) return; mode = m;
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      step = Math.ceil(step / 16) * 16;
+      fb.gain.cancelScheduledValues(now); fb.gain.setValueAtTime(0, now); fb.gain.setValueAtTime(0.32, now + 0.8);   // clear old echoes
+      if (m === 'moon') { bpm = bpmTarget = 104; S16 = 60/bpm/4; }
+      music.gain.setTargetAtTime(S.music ? (m === 'moon' ? 0.42 : 0.55) : 0, now, 0.3);
+    },
     pause(){ if (ctx && ctx.state === 'running') ctx.suspend(); },
     resume(){ if (ctx && ctx.state === 'suspended') ctx.resume(); },
     sfx
@@ -565,9 +582,9 @@ const FLY = {
   alien:   {lo: 1.2e8, hi: 3.8e11, speed: 16, rare: true, prize: 'An alien waves back'}
 };
 const resting = () => started && time - lastDropAt > 4;
-// SPEED 1–100 follows the tempo. At speed N the landing is pulled N% of the way to the centre, so at 100 every drop is dead centre.
+// SPEED 1–100 follows the tempo. At speed N the landing is pulled N/2 % of the way to the centre (50% at most).
 const speedOf = bpm => 1 + 99*clamp((bpm - Audio.BASE_BPM)/(Audio.MAX_BPM - Audio.BASE_BPM), 0, 1);
-const assist = () => (speedOf(Audio.tempo()) - 1)/99;
+const assist = () => 0.5*(speedOf(Audio.tempo()) - 1)/99;   // half the speed: speed 100 pulls 50% of the way
 let flyers = [], spawnIn = 1.5;
 function spawnFlyer(){
   const lo = mmForY(Math.max(0, camB - 40)), hi = mmForY(camB + FLOOR() - 160);
@@ -965,7 +982,7 @@ function drawCeremony(dt, g){
 }
 
 // ================= updates (Android app) =================
-const BUILD = '14', VERSION = '1.7';
+const BUILD = '15', VERSION = '1.8';
 const DL_API = 'https://api.github.com/repos/kubratemtehh-jpg/tower-to-the-moon-download/releases/latest';
 const DL_APK = 'https://github.com/kubratemtehh-jpg/tower-to-the-moon-download/releases/latest/download/tower-to-the-moon.apk';
 const isApp = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
