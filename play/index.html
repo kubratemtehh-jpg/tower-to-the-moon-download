@@ -109,13 +109,13 @@ body{background:var(--paper);color:var(--ink);font-family:var(--body);-webkit-us
       <div class="meter"><span>SPEED</span><div class="track"><div class="fill" id="tempoF"></div></div><span id="tempoT">1</span></div>
     </div>
     <div class="banner card" id="banner" hidden>
-      <span>Your tower is bending too far. Tap left or right of a crooked block to hammer it straight.</span>
+      <span>Your tower is bending too far. Tap or click beside a crooked block to hammer it straight.</span>
       <button class="btn primary" id="goFix" type="button">Show me</button>
     </div>
     <a class="btn primary upd-float" id="updFloat" hidden href="#">New version · Install</a>
   </div>
   <div class="toast" id="toast"></div>
-  <div class="hint" id="hint"><span>Tap when the block is over the tower</span></div>
+  <div class="hint" id="hint"><span>Tap the middle to drop · left or right to hammer</span></div>
   <div class="bar">
     <button class="btn" id="bShop" type="button">Shop</button>
     <button class="btn" id="bView" type="button">View</button>
@@ -137,7 +137,7 @@ body{background:var(--paper);color:var(--ink);font-family:var(--body);-webkit-us
     <div class="title-card card">
       <div class="tag">FROM 1 MM TO 384,400 KM</div>
       <h1><em>TOWER</em><span>TO THE</span>MOON</h1>
-      <p>Your blocks never fall. Tap the middle of the screen to drop a block on the BOOM. If the tower bends, tap left or right of a crooked block and a hammer knocks it straight from that side. The block swings in time with the music and crosses the centre on the first beat of every bar.</p>
+      <p>Your blocks never fall. Tap the middle of the screen (or click above the tower) to drop a block on the BOOM. If the tower bends, tap or click beside a crooked block and a hammer knocks it straight from that side. The block swings in time with the music and crosses the centre on the first beat of every bar.</p>
       <button class="btn primary" id="bStart" type="button">Tap to build</button>
     </div>
   </div>
@@ -1001,7 +1001,7 @@ function drawCeremony(dt, g){
 }
 
 // ================= updates (Android app) =================
-const BUILD = '17', VERSION = '2.0';
+const BUILD = '18', VERSION = '2.1';
 const DL_API = 'https://api.github.com/repos/kubratemtehh-jpg/tower-to-the-moon-download/releases/latest';
 const DL_APK = 'https://github.com/kubratemtehh-jpg/tower-to-the-moon-download/releases/latest/download/tower-to-the-moon.apk';
 const isApp = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
@@ -1049,7 +1049,7 @@ $('bShopClose').onclick = () => { Audio.sfx('click'); $('shopSheet').classList.r
 $('bReset').onclick = e => { if (!resetArm) { resetArm = true; e.target.textContent = 'Sure? Tap again'; return; } restart(); $('shopSheet').classList.remove('open'); };
 function restart(){
   const m = S.music; S = fresh(); S.music = m; disp = [0]; camB = 0; camX = 0; manual = false; falling = null; cer = null; flyers = []; parts = [];
-  $('win').hidden = true; Audio.setAlt(1); Audio.setMode('play'); recompute(); save(); hint('Tap the middle to drop · left or right to hammer');
+  $('win').hidden = true; Audio.setAlt(1); Audio.setMode('play'); recompute(); save(); hint(HOW);
 }
 $('bAgain').onclick = restart;
 $('bAdmire').onclick = () => { $('win').hidden = true; hint('Tap the Moon to see your stats again'); };
@@ -1063,7 +1063,7 @@ function focusOn(i){ if (i < 0) return; manual = true; camTarget = i*BH - FLOOR(
 $('bStart').onclick = () => {
   started = true; $('intro').hidden = true; Audio.start(); Audio.setAlt(topMM()); Audio.setMusic(S.music);
   if (won()) { Audio.setMode('moon'); if (!S.landed) startCeremony(); else showWin(); }
-  else if (S.blocks.length < 3) hint('Tap the middle to drop · left or right to hammer');
+  else if (S.blocks.length < 3) hint(HOW);
   checkUpdate(false);
 };
 
@@ -1110,26 +1110,36 @@ cv.addEventListener('pointermove', e => {
   if (!ptr.moved && Math.abs(dy) > 8) ptr.moved = true;
   if (ptr.moved) { manual = true; camTarget = null; camB = clampCam(ptr.cam + dy); }
 });
-cv.addEventListener('pointerup', e => { if (ptr) { clearTimeout(ptr.timer); if (!ptr.moved && !ptr.long) tap(e.clientX, e.clientY); } ptr = null; });
+cv.addEventListener('pointerup', e => { if (ptr) { clearTimeout(ptr.timer); if (!ptr.moved && !ptr.long) tap(e.clientX, e.clientY, e.pointerType === 'mouse'); } ptr = null; });
 cv.addEventListener('pointercancel', () => ptr = null);
 cv.addEventListener('wheel', e => { e.preventDefault(); if (ovTarget || cer) return; manual = true; camTarget = null; camB = clampCam(camB - e.deltaY); }, {passive:false});
 cv.addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('keydown', e => {
   if (e.code === 'Space') { e.preventDefault(); if (!started) $('bStart').click(); else if (ovTarget) lookUp(); else drop(); }
   if (e.key === 'v' || e.key === 'V') $('bView').click();
+  // arrows swing the hammer at the flashing block (or the top block) from that side
+  if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && started && !busy()) { e.preventDefault(); const hb = hintBlock(); swing(hb >= 0 ? hb : S.blocks.length - 1, e.key === 'ArrowLeft' ? -1 : 1); }
 });
 const clampCam = v => clamp(v, -40, Math.max(0, S.blocks.length*BH));
+const MOUSE = window.matchMedia && matchMedia('(hover: hover) and (pointer: fine)').matches;
+const HOW = MOUSE ? 'Click above the tower to drop · beside a block to hammer' : 'Tap the middle to drop · left or right to hammer';
 const zoneAt = x => x < W*0.3 ? -1 : (x > W*0.7 ? 1 : 0);   // -1 left · 0 middle · 1 right
 function nearestBlock(y){
   const wy = camB + (FLOOR() - y);
   return clamp(Math.floor(wy / BH), 0, S.blocks.length - 1);
 }
-function tap(x, y){
+// With a mouse: click the upper half (above the tower) to drop, beside a block to hammer it from that side.
+// With touch: middle third drops, left and right thirds hammer.
+function tap(x, y, mouse){
   if (cer) { if (cer.t > 2 && cer.t < 9) cer.t = Math.max(cer.t, 5.6); return; }
   if (ovTarget) { lookUp(); return; }
   if (tapFlyer(x, y) || tapCameo(x, y)) return;
   if (won()) { if (S.landed) showWin(); return; }
   if (!started) return;
+  if (mouse) {
+    if (y < Math.max(sy(S.blocks.length*BH), H*0.5)) { drop(); return; }
+    const i = nearestBlock(y); hideHint(); swing(i, x < towerX(i) ? -1 : 1); return;
+  }
   const z = zoneAt(x);
   if (z === 0) { drop(); return; }
   hideHint(); swing(nearestBlock(y), z);
@@ -1295,6 +1305,7 @@ function draw(n, dt){
 function start(data){
   if (!load(data && data.blocks ? data : null)) { try { load(JSON.parse(localStorage.getItem(KEY))); } catch(e){} }
   recompute(); musicBtn(); camB = Math.max(0, S.blocks.length*BH - FLOOR()*0.55);
+  $('hint').firstChild.textContent = HOW;
   if (S.blocks.length > 1) $('bStart').textContent = won() ? 'Back to the Moon' : 'Keep building';
   hideHint();
   requestAnimationFrame(frame);
