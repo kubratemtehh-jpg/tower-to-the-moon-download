@@ -175,6 +175,12 @@ const CAMEOS = [
   {mm: 2.2e11, kind: 'spaghetti', name: 'Flying spaghetti', side: 0.22}
 ];
 const WIND_LO = 3e5, WIND_HI = 2e7, SPACE = 1e8;
+// Layers of the sky, in real millimetres. Entering a new layer resets speed (and the landing assist) to 1.
+const LAYERS = [
+  [0, 'The ground'], [1e4, 'Rooftops'], [1e6, 'Troposphere'], [1.2e7, 'Stratosphere'], [5e7, 'Mesosphere'],
+  [8.5e7, 'Thermosphere'], [6e8, 'Exosphere'], [1e10, 'Deep space'], [2e11, 'Lunar approach']
+];
+const layerOf = mm => { let k = 0; while (k + 1 < LAYERS.length && mm >= LAYERS[k + 1][0]) k++; return k; };
 const UPG = {
   wide:  {name:'Wider blocks',  desc:'More surface on every block. Easier landings.', max:4, cost:[6,10,15,22]},
   steel: {name:'Steel frame',   desc:'Your tower tolerates more bending.',            max:4, cost:[8,12,18,26]},
@@ -410,7 +416,8 @@ const Audio = (() => {
     start(){ init(); if (ctx && ctx.state === 'suspended') ctx.resume(); },
     setMusic(on){ if (music) music.gain.setTargetAtTime(on ? 0.55 : 0, ctx.currentTime, 0.1); },
     setAlt(mm){ alt = mm; },
-    setTempo(b){ bpmTarget = clamp(b, BASE_BPM, MAX_BPM); }, tempoTarget: () => bpmTarget, tempo: () => bpm, BASE_BPM, MAX_BPM,
+    setTempo(b){ bpmTarget = clamp(b, BASE_BPM, MAX_BPM); },
+    resetTempo(){ bpm = bpmTarget = BASE_BPM; S16 = 60/bpm/4; }, tempoTarget: () => bpmTarget, tempo: () => bpm, BASE_BPM, MAX_BPM,
     setCrane(on){ craneOn = on; }, setCue(c){ cue = c; },
     // beats since the music started, on the clock the listener actually hears
     beat(){ if (!ctx || ctx.state !== 'running' || !anchorTime) return null; const heard = ctx.currentTime - (ctx.outputLatency || 0) - (ctx.baseLatency || 0); return anchorStep/4 + (heard - anchorTime)/(S16*4); },
@@ -777,6 +784,11 @@ function land(){
   let look = (n + 1) % 60 === 0;
   if (z1 === 'wind' && !S.seen.wind) { S.seen.wind = true; toast('WIND ZONE', 'Gusts nudge blocks after you drop them'); Audio.sfx('mile'); party(); look = true; }
   if (z1 === 'space' && !S.seen.space) { S.seen.space = true; toast('SPACE', 'Low gravity. Blocks drift down slowly'); Audio.sfx('mile'); party(); look = true; }
+  if (layerOf(mm1) !== layerOf(mm0)) {
+    Audio.resetTempo(); syncStreak = 0;
+    toast(LAYERS[layerOf(mm1)][1].toUpperCase(), 'New layer · speed back to 1');
+    Audio.sfx('mile'); party();
+  }
   Audio.setAlt(mm1);
   if (n + 1 === 4) hint('Tick, tick, tick, BOOM: drop on the boom');
   recompute(); save();
@@ -982,7 +994,7 @@ function drawCeremony(dt, g){
 }
 
 // ================= updates (Android app) =================
-const BUILD = '15', VERSION = '1.8';
+const BUILD = '16', VERSION = '1.9';
 const DL_API = 'https://api.github.com/repos/kubratemtehh-jpg/tower-to-the-moon-download/releases/latest';
 const DL_APK = 'https://github.com/kubratemtehh-jpg/tower-to-the-moon-download/releases/latest/download/tower-to-the-moon.apk';
 const isApp = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
@@ -1053,7 +1065,7 @@ let lastMortar = -1;
 function ui(){
   const n = S.blocks.length, mm = cum[n-1];
   $('alt').textContent = fmt(mm);
-  $('sub').innerHTML = won() ? 'Block ' + N + ' of ' + N + ' · <b>you made it</b>' : 'Block ' + n + ' of ' + N + ' · next block <b>' + fmt(heights[Math.min(n, N-1)]) + '</b>';
+  $('sub').innerHTML = won() ? 'Block ' + N + ' of ' + N + ' · <b>you made it</b>' : LAYERS[layerOf(mm)][1] + ' · block ' + n + ' of ' + N + ' · next <b>' + fmt(heights[Math.min(n, N-1)]) + '</b>';
   const nx = MILES.find(m => m[0] > mm);
   $('next').textContent = nx ? 'Next: ' + nx[1] + ' at ' + fmt(nx[0]) : 'You are standing on the Moon';
   if (S.mortar !== lastMortar) { $('mortar').textContent = S.mortar; lastMortar = S.mortar; }
